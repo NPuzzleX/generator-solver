@@ -1,22 +1,21 @@
 package main
 
 import (
-	slitherlink "Slitherlink"
-	sudoku "Sudoku"
+	"Sudoku"
 	"fmt"
 	"log"
 	"time"
 )
 
 func main() {
-	slitherlink.Generate()
+	testSudoku()
 }
 
 func testSudoku() {
-	const n = 3
+	const n = 4
 
-	for count := 0; count < 10; count++ {
-		dt, err := sudoku.Generate(n, time.Now().UnixMicro(), false, 60)
+	for count := 0; count < 2; count++ {
+		dt, err := Sudoku.Generate(n, time.Now().UnixMicro(), true, 150, 6)
 
 		if err != nil {
 			log.Fatal(err)
@@ -40,6 +39,8 @@ func testSudoku() {
 			}
 			fmt.Println()
 		}
+		fmt.Println()
+		fmt.Println("------------")
 		fmt.Println()
 	}
 

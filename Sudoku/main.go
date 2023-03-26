@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"math/rand"
+	"strconv"
 )
 
 // ------------------------------------------ HELPER ------------------------------------------
@@ -28,6 +29,15 @@ func remArrCheck(arr []int, target int) []int {
 func exArrCheck(arr []int, target int) bool {
 	for i := 0; i < len(arr); i++ {
 		if arr[i] == target {
+			return true
+		}
+	}
+	return false
+}
+
+func ex2ArrCheck(arr [][]int, target []int) bool {
+	for i := 0; i < len(arr); i++ {
+		if (arr[i][0] == target[0]) && (arr[i][1] == target[1]) {
 			return true
 		}
 	}
@@ -79,18 +89,16 @@ func getAllArrIdx(arr []int, target int) []int {
 }
 
 // ------------------------------------------ CONTROLLER ------------------------------------------
-func Generate(n int, rSeed int64, quick bool, holes int) ([][]int, error) {
+func Generate(n int, rSeed int64, quick bool, holes int, mode int) ([][]int, error) {
 	r := rand.New(rand.NewSource(rSeed))
 	lim := n * n
 	if (n < 3) || (n > 7) {
 		return nil, errors.New("n BETWEEN 3 AND 7")
 	}
 
-	/*
-		if holes > lim*(lim-3) {
-			return nil, errors.New("MAX # OF HOLES " + strconv.Itoa(lim*(lim-3)))
-		}
-	*/
+	if holes >= lim*lim {
+		return nil, errors.New("MAX # OF HOLES " + strconv.Itoa(lim*lim))
+	}
 
 	var seed [][]int
 	if quick {
@@ -105,10 +113,34 @@ func Generate(n int, rSeed int64, quick bool, holes int) ([][]int, error) {
 
 	var dt [][]int
 
-	for true {
+	counter := 0
+
+	if mode == -1 {
 		dt = copyArr(seed)
+		save := [][]int{}
+		availX := []int{}
+
+		for i := 0; i < lim; i++ {
+			availX = append(availX, lim)
+		}
+
 		for nhole := 0; nhole < holes; {
-			x := r.Intn(lim)
+			if counter >= lim*lim-nhole {
+				nhole--
+				dt[save[len(save)-1][0]][save[len(save)-1][1]] = seed[save[len(save)-1][0]][save[len(save)-1][1]]
+				save = save[:(len(save) - 1)]
+				counter = 0
+				availX[save[len(save)-1][0]]++
+			}
+
+			candidateX := []int{}
+			for i, e := range availX {
+				if e != 0 {
+					candidateX = append(candidateX, i)
+				}
+			}
+
+			x := candidateX[r.Intn(len(candidateX))]
 			availBlock := []int{}
 			for i := 0; i < lim; i++ {
 				if dt[x][i] != 0 {
@@ -120,18 +152,156 @@ func Generate(n int, rSeed int64, quick bool, holes int) ([][]int, error) {
 				continue
 			}
 
-			dt[x][availBlock[r.Intn(len(availBlock))]] = 0
-			nhole++
+			y := availBlock[r.Intn(len(availBlock))]
+
+			save = append(save, []int{x, y})
+			dt[x][y] = 0
+			_, err := Solver(dt)
+
+			if err == nil {
+				nhole++
+				availX[x]--
+			} else {
+				counter++
+				dt[x][y] = seed[x][y]
+				save = save[:(len(save) - 1)]
+			}
 		}
+	} else {
+		for true {
+			dt = copyArr(seed)
+			mould := GenerateMould(n, holes, mode, r)
 
-		_, err := Solver(dt)
+			for i := 0; i < lim; i++ {
+				for j := 0; j < lim; j++ {
+					if !mould[i][j] {
+						dt[i][j] = 0
+					}
+				}
+			}
 
-		if err == nil {
-			break
+			_, err := Solver(dt)
+
+			if err == nil {
+				break
+			}
 		}
 	}
 
 	return dt, nil
+}
+
+func GenerateMould(size int, holes int, mode int, r *rand.Rand) [][]bool {
+	/*
+	  Pattern:
+	  0: \ Symmetry
+	  1: / Symmetry
+	  2: X Symmetry
+	  3: | Symmetry
+	  4: - Symmetry
+	  5: + Symmetry
+	  6: Radial Symmetry 90 deg
+	*/
+
+	var mould [][]bool
+	lim := size * size
+	for i := 0; i < lim; i++ {
+		var dt []bool
+		for j := 0; j < lim; j++ {
+			dt = append(dt, true)
+		}
+		mould = append(mould, dt)
+	}
+
+	for nhole := 0; nhole < holes; {
+		x := r.Intn(lim)
+		y := r.Intn(lim)
+
+		if !mould[x][y] {
+			continue
+		}
+
+		mould[x][y] = false
+		nhole++
+
+		switch mode {
+		case 0:
+			{
+				if x != y {
+					mould[y][x] = false
+					nhole++
+				}
+			}
+
+		case 1:
+			{
+				if x+y != lim-1 {
+					mould[lim-1-y][lim-1-x] = false
+					nhole++
+				}
+			}
+
+		case 2:
+			{
+				if (x != y) || (x+y != lim-1) {
+					mould[y][x] = false
+					nhole++
+					mould[lim-1-y][lim-1-x] = false
+					nhole++
+					mould[lim-1-x][lim-1-y] = false
+					nhole++
+				}
+			}
+
+		case 3:
+			{
+				if float32(y) != (float32(lim)-1.0)/2.0 {
+					mould[x][lim-1-y] = false
+					nhole++
+				}
+			}
+
+		case 4:
+			{
+				if float32(x) != (float32(lim)-1.0)/2.0 {
+					mould[lim-1-x][y] = false
+					nhole++
+				}
+			}
+
+		case 5:
+			{
+				if (float32(y) != (float32(lim)-1.0)/2.0) && (float32(x) != (float32(lim)-1.0)/2.0) {
+					mould[lim-1-x][y] = false
+					nhole++
+					mould[x][lim-1-y] = false
+					nhole++
+					mould[lim-1-x][lim-1-y] = false
+					nhole++
+				} else if float32(x) != (float32(lim)-1.0)/2.0 {
+					mould[lim-1-x][y] = false
+					nhole++
+				} else if float32(y) != (float32(lim)-1.0)/2.0 {
+					mould[x][lim-1-y] = false
+					nhole++
+				}
+			}
+
+		case 6:
+			{
+				if (x != y) || (x+y != lim-1) {
+					mould[lim-1-y][x] = false
+					nhole++
+					mould[lim-1-x][lim-1-y] = false
+					nhole++
+					mould[y][lim-1-x] = false
+					nhole++
+				}
+			}
+		}
+	}
+
+	return mould
 }
 
 func Solver(board [][]int) ([][]int, error) {
